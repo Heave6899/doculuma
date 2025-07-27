@@ -190,11 +190,20 @@ def extract_fields(components, ancestors=None):
         if not isinstance(comp, dict):
             continue
         comp_ancestors = ancestors + [comp.get('key', comp.get('componentId', ''))]
-        is_input = comp.get('input', False)
-        is_hidden = comp.get('type') == 'hidden'
-        is_number = comp.get('type') == 'number'
-        is_basic_field = comp.get('type') in ('textfield', 'number', 'radio', 'dateinput', 'basicDropdown', 'email', 'phoneNumber', 'checkboxv2')
-        if is_input or is_hidden or is_number or is_basic_field:
+        
+        # --- MODIFIED LOGIC ---
+        # Expanded the list of what is considered a basic input field
+        is_basic_field = comp.get('type') in (
+            'textfield', 'number', 'radio', 'dateinput', 'basicDropdown', 
+            'email', 'phoneNumber', 'checkboxv2', 'hidden', 'textarea'
+        )
+        
+        if comp.get('input', False) or is_basic_field:
+            # Special handling for basicDropdown to get its values
+            comp_values = comp.get('values')
+            if comp.get('type') == 'basicDropdown' and not comp_values:
+                comp_values = (comp.get('data', {}) or {}).get('values')
+
             fields.append({
                 'component_id': comp.get('componentId', ''),
                 'input_key': comp.get('key', ''),
@@ -205,7 +214,7 @@ def extract_fields(components, ancestors=None):
                 'default_value': serialize(comp.get('defaultValue')),
                 'data_src': comp.get('dataSrc', ''),
                 'data_ref_key': (comp.get('data', {}) or {}).get('dataReferenceKey', ''),
-                'values': serialize(comp.get('values') or (comp.get('data', {}) or {}).get('values')),
+                'values': serialize(comp_values), # Use the extracted values
                 'validate': serialize(comp.get('validate', {})),
                 'linked_inputs': serialize(comp.get('linked', {}).get('inputs', [])),
                 'linked_outputs': serialize(comp.get('linked', {}).get('outputs', [])),
@@ -215,17 +224,19 @@ def extract_fields(components, ancestors=None):
                 'was_dropped': comp.get('wasDropped', False),
                 'ancestors': ' > '.join([str(a) for a in comp_ancestors if a]),
             })
+        
+        # Recurse into all possible nested structures
         for k in ('components', 'columns', 'rows', 'children'):
             subs = comp.get(k)
             if isinstance(subs, list):
+                # If we have columns or rows, they often contain a 'components' list themselves
                 if k in ('columns', 'rows'):
-                    for col in subs:
-                        if isinstance(col, dict) and 'components' in col:
-                            fields.extend(extract_fields(col['components'], comp_ancestors + [col.get('key', '')]))
-                        else:
-                            fields.extend(extract_fields([col], comp_ancestors))
+                    for item in subs:
+                        if isinstance(item, dict) and 'components' in item:
+                            fields.extend(extract_fields(item['components'], comp_ancestors + [item.get('key', '')]))
                 else:
                     fields.extend(extract_fields(subs, comp_ancestors))
+
     return fields
 
 # def extract_unqork_module_inputs(conn, folder_path: str, table_name: str, persist: bool = False) -> pd.DataFrame:
