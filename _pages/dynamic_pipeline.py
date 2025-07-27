@@ -340,94 +340,152 @@ def main():
                     st.dataframe(result.head(), use_container_width=True)
                 else:
                     st.json(result)
-                    
+
+def get_safe_index(options, value):
+    """Helper function to safely get the index for a selectbox."""
+    try:
+        return options.index(value)
+    except (ValueError, TypeError):
+        # Default to the first option if value is not found or is None
+        return 0
+       
 def render_step_ui(step, index):
-    """Renders the UI controls for a single pipeline step."""
+    """Renders the UI controls for a single pipeline step, ensuring loaded values are displayed."""
     step_id = step['id']
     input_ids = get_pipeline_step_ids(step_id)
 
     def get_cols(step_id_key):
         """Helper to get columns from a selected input step's dataframe."""
         input_step_id = step.get(step_id_key)
-        
-        # Priority 1: Use the live result if it exists
         if input_step_id in st.session_state.pipeline_results:
             input_df = st.session_state.pipeline_results[input_step_id]
             if isinstance(input_df, pd.DataFrame):
                 return input_df.columns.tolist()
-
-        # Priority 2: If no live result, trace back to the source
-        if input_step_id:
-             parent_step = next((s for s in st.session_state.pipeline_steps if s['id'] == input_step_id), None)
-             # If the parent is a simple "Input" step, we can get its schema directly
-             if parent_step and parent_step['type'] == 'Input' and parent_step.get('table_name'):
-                 try:
-                    # Read schema directly from the database for Input steps
-                    return pd.read_sql(f"SELECT * FROM `{parent_step['table_name']}` LIMIT 1", conn).columns.tolist()
-                 except Exception:
-                    return [] # Return empty if the table doesn't exist or there's an error
-        
-        # Fallback if schema can't be determined
         return []
 
     # --- Step-specific UI Configurations ---
     if step['type'] == 'Input':
-        step['table_name'] = st.selectbox("Select Table", get_tables_list(), key=f"table_{index}")
+        options = get_tables_list()
+        saved_value = step.get('table_name')
+        step['table_name'] = st.selectbox(
+            "Select Table", options,
+            index=get_safe_index(options, saved_value),
+            key=f"table_{index}"
+        )
 
     elif step['type'] == 'SQL':
-        step['input_step_1'] = st.selectbox("Input Step", input_ids, key=f"sql_input_{index}")
-        st.info("Use `df` to refer to the input DataFrame (e.g., `SELECT * FROM df`).")
-        step['sql_query'] = st.text_area("SQL Query (DuckDB)", step.get('sql_query', "SELECT * FROM df"), key=f"sql_query_{index}")
+        saved_input = step.get('input_step_1')
+        step['input_step_1'] = st.selectbox(
+            "Input Step", input_ids,
+            index=get_safe_index(input_ids, saved_input),
+            key=f"sql_input_{index}"
+        )
+        st.info(f"Use the step ID as the table name (e.g., `SELECT * FROM {step.get('input_step_1') or '...'}`).")
+        step['sql_query'] = st.text_area(
+            "SQL Query (DuckDB)",
+            value=step.get('sql_query', f"SELECT * FROM {step.get('input_step_1') or '...'}" ),
+            key=f"sql_query_{index}"
+        )
 
     elif step['type'] == 'LLM Enrich':
-        step['input_step_1'] = st.selectbox("Input Step", input_ids, key=f"llm_input_{index}")
-        step['new_column_name'] = st.text_input("New Column Name", step.get('new_column_name', "enriched_col"), key=f"llm_col_{index}")
+        saved_input = step.get('input_step_1')
+        step['input_step_1'] = st.selectbox(
+            "Input Step", input_ids,
+            index=get_safe_index(input_ids, saved_input),
+            key=f"llm_input_{index}"
+        )
+        step['new_column_name'] = st.text_input(
+            "New Column Name",
+            value=step.get('new_column_name', "enriched_col"),
+            key=f"llm_col_{index}"
+        )
         st.info("Use {column_name} to reference values from other columns in your prompt.")
-        step['prompt'] = st.text_area("LLM Prompt", step.get('prompt', "Based on the value in {column_to_use}, generate a new value."), key=f"llm_prompt_{index}")
+        step['prompt'] = st.text_area(
+            "LLM Prompt",
+            value=step.get('prompt', "Describe the category for: {column_name}"),
+            key=f"llm_prompt_{index}"
+        )
 
     elif step['type'] == 'Semantic Loop':
         st.info("Searches an indexed collection for matches to text in a loop table.")
         col1, col2 = st.columns(2)
         with col1:
-            step['input_step_1'] = st.selectbox("Loop Table (Input)", input_ids, key=f"sem_in1_{index}")
-            step['query_column'] = st.selectbox("Column with Text to Search", get_cols('input_step_1'), key=f"sem_q_col_{index}")
+            saved_input = step.get('input_step_1')
+            step['input_step_1'] = st.selectbox(
+                "Loop Table (Input)", input_ids,
+                index=get_safe_index(input_ids, saved_input),
+                key=f"sem_in1_{index}"
+            )
+            col_options = get_cols('input_step_1')
+            saved_q_col = step.get('query_column')
+            step['query_column'] = st.selectbox(
+                "Column with Text to Search", col_options,
+                index=get_safe_index(col_options, saved_q_col),
+                key=f"sem_q_col_{index}"
+            )
         with col2:
-            step['search_collection_prefix'] = st.selectbox("Indexed Collection", get_indexed_collections_list(), key=f"sem_in2_{index}")
+            collection_options = get_indexed_collections_list()
+            saved_collection = step.get('search_collection_prefix')
+            step['search_collection_prefix'] = st.selectbox(
+                "Indexed Collection", collection_options,
+                index=get_safe_index(collection_options, saved_collection),
+                key=f"sem_in2_{index}"
+            )
+        st.markdown("##### Additional Configurations")
         c1, c2, c3 = st.columns(3)
         with c1:
             step['top_k'] = st.number_input("Top K", min_value=1, value=step.get('top_k', 5), key=f"sem_top_k_{index}")
         with c2:
             step['similarity_threshold'] = st.slider("Similarity Threshold", 0.0, 1.0, value=step.get('similarity_threshold', 0.7), step=0.01, key=f"sem_threshold_{index}")
         with c3:
-            step['join_type'] = st.selectbox("Join Type", ["left", "inner"], index=["left", "inner"].index(step.get('join_type', 'left')), key=f"sem_join_type_{index}")
+            join_options = ["left", "inner"]
+            step['join_type'] = st.selectbox("Join Type", join_options, index=get_safe_index(join_options, step.get('join_type', 'left')), key=f"sem_join_type_{index}")
 
     elif step['type'] == 'Merge':
         st.info("Joins two data steps together based on key columns.")
         col1, col2 = st.columns(2)
         with col1:
-            step['input_step_1'] = st.selectbox("Left Input Step", input_ids, key=f"merge_in1_{index}")
-            step['left_on'] = st.selectbox("Left Join Key", get_cols('input_step_1'), key=f"merge_left_on_{index}")
+            saved_in1 = step.get('input_step_1')
+            step['input_step_1'] = st.selectbox("Left Input Step", input_ids, index=get_safe_index(input_ids, saved_in1), key=f"merge_in1_{index}")
+            left_cols = get_cols('input_step_1')
+            saved_left_on = step.get('left_on')
+            step['left_on'] = st.selectbox("Left Join Key", left_cols, index=get_safe_index(left_cols, saved_left_on), key=f"merge_left_on_{index}")
         with col2:
-            step['input_step_2'] = st.selectbox("Right Input Step", input_ids, key=f"merge_in2_{index}")
-            step['right_on'] = st.selectbox("Right Join Key", get_cols('input_step_2'), key=f"merge_right_on_{index}")
-        step['how'] = st.selectbox("Join Type", ['inner', 'left', 'right', 'outer'], key=f"merge_how_{index}")
+            saved_in2 = step.get('input_step_2')
+            step['input_step_2'] = st.selectbox("Right Input Step", input_ids, index=get_safe_index(input_ids, saved_in2), key=f"merge_in2_{index}")
+            right_cols = get_cols('input_step_2')
+            saved_right_on = step.get('right_on')
+            step['right_on'] = st.selectbox("Right Join Key", right_cols, index=get_safe_index(right_cols, saved_right_on), key=f"merge_right_on_{index}")
+
+        how_options = ['inner', 'left', 'right', 'outer']
+        saved_how = step.get('how', 'inner')
+        step['how'] = st.selectbox("Join Type", how_options, index=get_safe_index(how_options, saved_how), key=f"merge_how_{index}")
 
     elif step['type'] == 'Deduplicate':
-        step['input_step_1'] = st.selectbox("Input Step", input_ids, key=f"dedup_input_{index}")
+        saved_input = step.get('input_step_1')
+        step['input_step_1'] = st.selectbox("Input Step", input_ids, index=get_safe_index(input_ids, saved_input), key=f"dedup_input_{index}")
         st.info("If no columns are selected, all columns will be used to identify duplicate rows.")
-        step['subset'] = st.multiselect("Columns to consider for duplicates", get_cols('input_step_1'), key=f"dedup_cols_{index}")
+        dedup_cols = get_cols('input_step_1')
+        saved_subset = step.get('subset', [])
+        step['subset'] = st.multiselect("Columns to consider for duplicates", dedup_cols, default=saved_subset, key=f"dedup_cols_{index}")
 
     elif step['type'] == 'Validate':
-        step['input_step_1'] = st.selectbox("Input Step", input_ids, key=f"val_input_{index}")
+        saved_input = step.get('input_step_1')
+        step['input_step_1'] = st.selectbox("Input Step", input_ids, index=get_safe_index(input_ids, saved_input), key=f"val_input_{index}")
         col1, col2 = st.columns(2)
         with col1:
-            step['column'] = st.selectbox("Column to Validate", get_cols('input_step_1'), key=f"val_col_{index}")
+            val_cols = get_cols('input_step_1')
+            saved_val_col = step.get('column')
+            step['column'] = st.selectbox("Column to Validate", val_cols, index=get_safe_index(val_cols, saved_val_col), key=f"val_col_{index}")
         with col2:
-            step['rule'] = st.selectbox("Validation Rule", ['not_null', 'is_unique'], key=f"val_rule_{index}")
+            rule_options = ['not_null', 'is_unique']
+            saved_rule = step.get('rule')
+            step['rule'] = st.selectbox("Validation Rule", rule_options, index=get_safe_index(rule_options, saved_rule), key=f"val_rule_{index}")
 
     elif step['type'] == 'Save & Index':
-        step['input_step_1'] = st.selectbox("Input Step", input_ids, key=f"save_input_{index}")
-        step['table_name'] = st.text_input("New Base Table Name", step.get('table_name', f"pipeline_output_{step_id}"), key=f"save_name_{index}")
+        saved_input = step.get('input_step_1')
+        step['input_step_1'] = st.selectbox("Input Step", input_ids, index=get_safe_index(input_ids, saved_input), key=f"save_input_{index}")
+        step['table_name'] = st.text_input("New Base Table Name", value=step.get('table_name', f"pipeline_output_{step_id}"), key=f"save_name_{index}")
 
     # --- Step Management Buttons ---
     st.markdown("---")
@@ -451,6 +509,6 @@ def render_step_ui(step, index):
     with cols[4]:
         if st.button("▶️ Run Just This Step", key=f"run_{index}", use_container_width=True):
             execute_steps([step_id])
-            
+                
 if __name__ == "__main__":
     main()

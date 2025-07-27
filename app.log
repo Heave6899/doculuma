@@ -1787,3 +1787,4 @@ of the client's browser and the Streamlit server._
 2025-07-27 01:01:23,820 [INFO] Persisted sales_q1 -> sales_q1_v20250727010123812170
 2025-07-27 01:01:26,814 [INFO] Persisted sales_q2 -> sales_q2_v20250727010126802254
 2025-07-27 01:01:51,078 [INFO] Persisted schema -> schema_v20250727010151074141
+2025-07-27 16:31:57,535 [ERROR] Failed to initialize database: dlopen(extensions/fuzzy.dylib, 0x000A): tried: 'extensions/fuzzy.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSextensions/fuzzy.dylib' (no such file), '/opt/homebrew/Cellar/sqlite/3.50.1/lib/extensions/fuzzy.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/Cellar/sqlite/3.50
