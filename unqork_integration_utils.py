@@ -715,14 +715,15 @@ def extract_integrations(component):
     return ints
 
 def extract_plugins(component):
-    """Recursively extracts Plugin components and their settings."""
+    """MODIFIED: Now also extracts {{...}} references from settings."""
     plugs = []
     if component.get("type") == "plugin":
+        settings = component.get("pluginSettings", {})
         plugs.append({
             "component_id": component.get("componentId", ""),
-            "settings":     json.dumps(component.get("pluginSettings", {}))
+            "settings": json.dumps(settings),
+            "plugin_references": serialize(find_mustache_references(settings))
         })
-
     for k in ('components', 'columns', 'rows', 'children'):
         subs = component.get(k)
         if isinstance(subs, list):
@@ -758,18 +759,54 @@ def extract_fields(component):
                     fields.extend(extract_fields(sub))
     return fields
 
+def find_mustache_references(obj):
+    """NEW: Recursively finds all {{...}} references in a nested object."""
+    refs = set()
+    if isinstance(obj, str):
+        # Find all non-overlapping matches
+        matches = re.findall(r'\{\{.*?\}\}', obj)
+        if matches:
+            refs.update(matches)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            refs.update(find_mustache_references(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            refs.update(find_mustache_references(item))
+
+def extract_dataworkflows(component):
+    """NEW: Extracts Dataworkflow IO logic."""
+    dwfs = []
+    if component.get("type") == "dataworkflow":
+        dwf_data = component.get("dataworkflowData", {})
+        operators = dwf_data.get("operators", [])
+        inputs = [op.get("endPoint") for op in operators if op.get("type") == "input" and op.get("endPoint")]
+        outputs = [op.get("output") for op in operators if op.get("type") == "output" and op.get("output")]
+        dwfs.append({
+            "component_id": component.get("componentId", ""),
+            "dataworkflow_data": serialize(dwf_data),
+            "dwf_inputs": serialize(inputs),
+            "dwf_outputs": serialize(outputs)
+        })
+    for k in ('components', 'columns', 'rows', 'children'):
+        subs = component.get(k)
+        if isinstance(subs, list):
+            for sub in subs:
+                if isinstance(sub, dict):
+                    dwfs.extend(extract_dataworkflows(sub))
+    return dwfs
+
 def extract_html_content(component):
-    """Recursively extracts HTML from Content and HTMLElement components."""
+    """MODIFIED: Now also extracts {{...}} references from the HTML."""
     html_data = []
     if component.get("type") in ("content", "htmlelement"):
-        # The HTML content can be in the 'html' or 'content' key
         content = component.get("html", "") or component.get("content", "")
         if content:
             html_data.append({
                 "component_id": component.get("componentId", ""),
-                "html_content": content
+                "html_content": content,
+                "html_references": serialize(find_mustache_references(content))
             })
-
     for k in ('components', 'columns', 'rows', 'children'):
         subs = component.get(k)
         if isinstance(subs, list):
@@ -782,38 +819,34 @@ def extract_html_content(component):
 # --- Corrected Merging Function ---
 
 def extract_all_module_details_merged(module_json):
-    """Extracts and merges all details from a Unqork module into a single DataFrame."""
+    """MODIFIED: Now merges the deep logic from Plugins, HTML, and Dataworkflows."""
     components = module_json.get("components", [])
-    if not components:
-        return pd.DataFrame()
-
+    if not components: return pd.DataFrame()
     root_component = {'components': components}
 
-    # Step 1: Extract details from all relevant component types.
-    raws          = extract_raw_components(root_component)
-    integrations  = extract_integrations(root_component)
-    plugins       = extract_plugins(root_component)
-    fields        = extract_fields(root_component)
+    # Step 1: Extract all details, including deep logic.
+    raws = extract_raw_components(root_component)
+    integrations = extract_integrations(root_component)
+    plugins = extract_plugins(root_component)
+    fields = extract_fields(root_component)
     html_contents = extract_html_content(root_component)
+    dataworkflows = extract_dataworkflows(root_component)
 
-    df_raw        = pd.DataFrame(raws)
-    df_int        = pd.DataFrame(integrations)
-    df_plug       = pd.DataFrame(plugins)
-    df_fields     = pd.DataFrame(fields)
-    df_html       = pd.DataFrame(html_contents)
+    # Convert all to DataFrames
+    df_raw = pd.DataFrame(raws)
+    df_int = pd.DataFrame(integrations)
+    df_plug = pd.DataFrame(plugins)
+    df_fields = pd.DataFrame(fields)
+    df_html = pd.DataFrame(html_contents)
+    df_dwf = pd.DataFrame(dataworkflows)
 
-    # Step 2: Use the 'raw' DataFrame as the base, as it contains every component.
-    if df_raw.empty:
-        return pd.DataFrame()
-
+    # Step 2: Use the 'raw' DataFrame as the complete base.
+    if df_raw.empty: return pd.DataFrame()
     join_key = "component_id"
     df = df_raw.drop_duplicates(subset=[join_key]).copy()
-    
-    # Clean up the base by removing the first empty ancestor
     df['ancestors'] = df['ancestors'].str.replace(r'^\s*>\s*', '', regex=True)
 
-
-    # Step 3: Merge specialized data onto the base DataFrame.
+    # Step 3: Merge all specialized data onto the base DataFrame.
     if not df_fields.empty:
         df = pd.merge(df, df_fields.drop_duplicates(subset=[join_key]), how="left", on=join_key)
     if not df_int.empty:
@@ -822,15 +855,16 @@ def extract_all_module_details_merged(module_json):
         df = pd.merge(df, df_plug.drop_duplicates(subset=[join_key]), how="left", on=join_key)
     if not df_html.empty:
         df = pd.merge(df, df_html.drop_duplicates(subset=[join_key]), how="left", on=join_key)
+    if not df_dwf.empty:
+        df = pd.merge(df, df_dwf.drop_duplicates(subset=[join_key]), how="left", on=join_key)
     
-    # Add module-level info for context
-    df["module_id"]    = module_json.get("_id")
+    # Add module-level info
+    df["module_id"] = module_json.get("_id")
     df["module_title"] = module_json.get("title")
-    # Add module-level custom CSS
     df["module_custom_css"] = module_json.get("customCss", "")
 
-
     return df
+
 
 # --- Main Driver Function ---
 
