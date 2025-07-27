@@ -205,7 +205,9 @@ def run_single_step(step):
             # --- REAL SEMANTIC LOOP LOGIC ---
             all_matches = []
             queries = loop_df[step['query_column']].tolist()
-
+            top_k = step.get("top_k", 5)
+            similarity_threshold = step.get("similarity_threshold", 0.7)
+            join_type = step.get("join_type", "left")
             # The semantic_search_chroma function needs a single query, not a list.
             # We must loop and call it for each query.
             progress_text = "Running Semantic Loop... please wait."
@@ -219,19 +221,26 @@ def run_single_step(step):
                 search_results = db_utils.semantic_search_chroma(
                     chroma_client,
                     query_text,
-                    step['search_collection_prefix']
+                    step['search_collection_prefix'],
+                    top_k=top_k
                 )
+                found_match_for_row = False
 
-                # Un-nest the results
                 for table_name, matches in search_results.items():
                     for match in matches:
-                        new_row = original_row.copy()
-                        new_row['match_table'] = table_name
-                        new_row['match_text'] = match.get('text')
-                        new_row['match_similarity'] = match.get('similarity')
-                        # Add metadata from the matched document
-                        new_row.update(match.get('metadata', {}))
-                        all_matches.append(new_row)
+                        # Apply similarity filter
+                        if match.get('similarity', 0) >= similarity_threshold:
+                            found_match_for_row = True
+                            new_row = original_row.copy()
+                            new_row['match_table'] = table_name
+                            new_row['match_text'] = match.get('text')
+                            new_row['match_similarity'] = match.get('similarity')
+                            new_row.update(match.get('metadata', {}))
+                            all_matches.append(new_row)
+                
+                # If it's a left join and no matches were found, add the original row
+                if join_type == 'left' and not found_match_for_row:
+                    all_matches.append(original_row)
                 
                 loop_progress_bar.progress((i + 1) / len(queries), text=progress_text)
             
@@ -384,6 +393,13 @@ def render_step_ui(step, index):
             step['query_column'] = st.selectbox("Column with Text to Search", get_cols('input_step_1'), key=f"sem_q_col_{index}")
         with col2:
             step['search_collection_prefix'] = st.selectbox("Indexed Collection", get_indexed_collections_list(), key=f"sem_in2_{index}")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            step['top_k'] = st.number_input("Top K", min_value=1, value=step.get('top_k', 5), key=f"sem_top_k_{index}")
+        with c2:
+            step['similarity_threshold'] = st.slider("Similarity Threshold", 0.0, 1.0, value=step.get('similarity_threshold', 0.7), step=0.01, key=f"sem_threshold_{index}")
+        with c3:
+            step['join_type'] = st.selectbox("Join Type", ["left", "inner"], index=["left", "inner"].index(step.get('join_type', 'left')), key=f"sem_join_type_{index}")
 
     elif step['type'] == 'Merge':
         st.info("Joins two data steps together based on key columns.")
