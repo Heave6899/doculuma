@@ -529,10 +529,17 @@ def extract_all_module_details_merged(module_json):
 
     # Re-add label (and other field-specific cols) from df_fields
     if not df_fields.empty:
-        label_df = df_fields[join_cols + ["label"]].drop_duplicates()
-        df = pd.merge(df, label_df, how="left", on=join_cols)
+        # Merge the entire df_fields DataFrame, not just the label column.
+        # We drop duplicates on the join keys to ensure a clean one-to-one merge.
+        fields_to_merge = df_fields.drop_duplicates(subset=join_cols)
+        df = pd.merge(df, fields_to_merge, how="left", on=join_cols)
     else:
-        df["label"] = None
+        # If there are no fields, create empty placeholder columns to maintain a consistent structure.
+        placeholder_cols = ['input_type', 'label', 'description', 'placeholder', 'default_value', 'values', 'validate', 'persistent']
+        for col in placeholder_cols:
+            if col not in df.columns:
+                df[col] = None
+
 
     # Merge: validations
     if not df_validations.empty:
