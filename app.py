@@ -7,7 +7,7 @@ from streamlit_option_menu import option_menu
 import config
 import db_utils
 import dialogs
-from _pages import homepage, pipeline_steps, settings, uni_query, upload, sql_console, version_history, json_explorer, table_editor, visualization
+from _pages import dynamic_pipeline, homepage, pipeline_steps, settings, uni_query, upload, sql_console, version_history, json_explorer, table_editor, visualization
 from integrations import unqork_integration
 
 def render_sidebar(conn):
@@ -105,7 +105,7 @@ def main():
     elif selected_page == "SQL Console":
         sql_console.render(conn)
     elif selected_page == "Dynamic Pipeline":  # <-- ADDED HERE
-        pipeline_steps.render(conn)
+        dynamic_pipeline.main()
     elif selected_page == "Version History":
         version_history.render(conn)
     elif selected_page == "JSON Explorer":

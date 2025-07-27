@@ -1776,3 +1776,14 @@ of the client's browser and the Streamlit server._
 2025-07-25 17:46:47,165 [ERROR] Giving up send_request(...) after 4 tries (requests.exceptions.SSLError: HTTPSConnectionPool(host='us.i.posthog.com', port=443): Max retries exceeded with url: /batch/ (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)'))))
 2025-07-25 17:46:49,160 [INFO] Persisted e2e_brd_module_interjson -> e2e_brd_module_interjson_v20250725174648538262
 2025-07-26 13:03:45,133 [ERROR] Error querying ChromaDB collection 'doculuma_embeddings_ppfl_rule_messages': Error executing plan: Internal error: Error creating hnsw segment reader: Nothing found on disk
+2025-07-27 00:10:50,945 [INFO] Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-07-27 00:12:01,194 [INFO] Load pretrained SentenceTransformer: all-MiniLM-L6-v2
+2025-07-27 00:12:02,994 [ERROR] Failed to initialize database: dlopen(extensions/fuzzy.dylib, 0x000A): tried: 'extensions/fuzzy.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSextensions/fuzzy.dylib' (no such file), '/opt/homebrew/Cellar/sqlite/3.50.1/lib/extensions/fuzzy.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/opt/homebrew/Cellar/sqlite/3.50
+2025-07-27 00:59:29,000 [INFO] Persisted promo_codes -> promo_codes_v20250727005928987416
+2025-07-27 00:59:53,344 [INFO] Persisted customer_feedback -> customer_feedback_v20250727005953339718
+2025-07-27 01:00:10,813 [INFO] Persisted inventory -> inventory_v20250727010010803070
+2025-07-27 01:01:02,972 [INFO] Persisted warehouse -> warehouse_v20250727010102965294
+2025-07-27 01:01:19,615 [INFO] Persisted products -> products_v20250727010119602805
+2025-07-27 01:01:23,820 [INFO] Persisted sales_q1 -> sales_q1_v20250727010123812170
+2025-07-27 01:01:26,814 [INFO] Persisted sales_q2 -> sales_q2_v20250727010126802254
+2025-07-27 01:01:51,078 [INFO] Persisted schema -> schema_v20250727010151074141

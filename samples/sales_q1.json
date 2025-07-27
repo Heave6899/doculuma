@@ -1,0 +1,8 @@
+[
+  {"transaction_id": "T001", "date": "2024-01-15", "product_id": "GZ-001", "quantity": 2, "customer_email": "alice@example.com"},
+  {"transaction_id": "T002", "date": "2024-01-17", "product_id": "GZ-003", "quantity": 1, "customer_email": "BOB@EXAMPLE.COM"},
+  {"transaction_id": "T003", "date": "2024-02-10", "product_id": "GZ-005", "quantity": 1, "customer_email": "charlie at example dot com"},
+  {"transaction_id": "T004", "date": "2024-02-21", "product_id": "", "quantity": 1, "customer_email": "dave@example.com"},
+  {"transaction_id": "T005", "date": "2024-03-05", "product_id": "GZ-002", "quantity": 1, "customer_email": "eve@example.com"},
+  {"transaction_id": "T006", "date": "2024-03-30", "product_id": "GZ-007", "quantity": 3, "customer_email": "frank@example.com"}
+]

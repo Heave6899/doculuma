@@ -1,0 +1,16 @@
+[
+  {
+    "warehouse_id": "WH-NYC-01",
+    "city": "New York",
+    "state": "NY",
+    "manager": "John Doe",
+    "full_address": "123 Ful-ton St, New York, NY 10038"
+  },
+  {
+    "warehouse_id": "WH-SF-02",
+    "city": "San Francisco",
+    "state": "CA",
+    "manager": "Jane Smith",
+    "full_address": "456 Mar-ket St, San Francisco, CA 94105"
+  }
+]

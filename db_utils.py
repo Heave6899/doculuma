@@ -304,3 +304,59 @@ def delete_embeddings_from_chroma(chroma_client, table_name, row_ids):
         config.logger.info(f"Deleted embeddings for rows {row_ids} from {collection_name}")
     except Exception as e:
         config.logger.error(f"Error deleting embeddings from ChromaDB: {e}")
+        
+def get_all_indexed_collections():
+    """
+    Fetches the names of all collections currently stored in ChromaDB.
+    """
+    try:
+        # CORRECTED: Get the client from your existing function first
+        client = get_chroma_client()
+        
+        collections = client.list_collections()
+        # The client returns Collection objects, so we extract the name from each
+        return [collection.name for collection in collections]
+    except Exception as e:
+        print(f"An error occurred while fetching ChromaDB collections: {e}")
+        return []
+    
+# Add these three functions to your db_utils.py file
+
+def save_pipeline(conn: sqlite3.Connection, name: str, definition: list):
+    """Saves or updates a pipeline definition in the database."""
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO saved_pipelines (name, definition) VALUES (?, ?)
+                ON CONFLICT(name) DO UPDATE SET definition=excluded.definition
+                """,
+                (name, json.dumps(definition))
+            )
+        config.logger.info(f"Saved pipeline '{name}' to the database.")
+    except Exception as e:
+        config.logger.error(f"Error saving pipeline '{name}': {e}")
+        st.error(f"Failed to save pipeline: {e}")
+
+def get_saved_pipeline_names(conn: sqlite3.Connection) -> list:
+    """Returns a list of all saved pipeline names."""
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM saved_pipelines ORDER BY name ASC")
+            return [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        config.logger.error(f"Error fetching saved pipeline names: {e}")
+        return []
+
+def load_pipeline_definition(conn: sqlite3.Connection, name: str) -> list:
+    """Loads a specific pipeline definition by its name."""
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("SELECT definition FROM saved_pipelines WHERE name = ?", (name,))
+            result = cur.fetchone()
+            return json.loads(result[0]) if result else []
+    except Exception as e:
+        config.logger.error(f"Error loading pipeline '{name}': {e}")
+        return []

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.2",
+  "author": "GizmoGalaxy Internal",
+  "definitions": {
+    "Charger": {
+      "required_fields": ["product_id", "product_name", "price_usd", "description"],
+      "properties": {
+        "price_usd": {"type": "number"},
+        "description": {"type": "string", "maxLength": 200}
+      }
+    },
+    "Headphone": {
+      "required_fields": ["product_id", "product_name", "price_usd"],
+      "properties": {
+        "price_usd": {"type": "number"},
+        "wireless": {"type": "boolean", "default": true}
+      }
+    },
+    "Accessory": {
+      "required_fields": ["product_id", "product_name", "price_usd"],
+      "properties": {
+        "price_usd": {"type": "number"}
+      }
+    },
+    "Wearable": {
+      "required_fields": ["product_id", "product_name", "price_usd", "description"],
+      "properties": {
+        "price_usd": {"type": "number"},
+        "health_features": {
+          "type": "array",
+          "items": ["heart_rate", "step_counter", "sleep_tracking"]
+        }
+      }
+    }
+  }
+}
