@@ -172,7 +172,24 @@ def run_single_step(step):
         elif step['type'] == 'Merge':
             df1 = st.session_state.pipeline_results[step['input_step_1']]
             df2 = st.session_state.pipeline_results[step['input_step_2']]
-            result_df = pd.merge(df1, df2, left_on=step['left_on'], right_on=step['right_on'], how=step['how'])
+            if df1 is None or df2 is None: raise ValueError("One or both inputs for Merge not found.")
+
+            # --- New Code ---
+            left_prefix = step.get('left_prefix', f"{step.get('input_step_1', 'left')}_")
+            right_prefix = step.get('right_prefix', f"{step.get('input_step_2', 'right')}_")
+
+            # Avoid adding prefix to the join key itself
+            df1_prefixed = df1.rename(columns={col: f"{left_prefix}{col}" for col in df1.columns if col != step['left_on']})
+            df2_prefixed = df2.rename(columns={col: f"{right_prefix}{col}" for col in df2.columns if col != step['right_on']})
+            
+            result_df = pd.merge(
+                df1_prefixed, 
+                df2_prefixed, 
+                left_on=f"{left_prefix}{step['left_on']}" if step['left_on'] in df1_prefixed.columns else step['left_on'],
+                right_on=f"{right_prefix}{step['right_on']}" if step['right_on'] in df2_prefixed.columns else step['right_on'],
+                how=step['how']
+            )
+            
             st.session_state.pipeline_results[step_id] = result_df
 
         elif step['type'] == 'Deduplicate':
@@ -450,12 +467,22 @@ def render_step_ui(step, index):
             left_cols = get_cols('input_step_1')
             saved_left_on = step.get('left_on')
             step['left_on'] = st.selectbox("Left Join Key", left_cols, index=get_safe_index(left_cols, saved_left_on), key=f"merge_left_on_{index}")
+            step['left_prefix'] = st.text_input(
+                "Left Table Prefix", 
+                value=step.get('left_prefix', f"{step.get('input_step_1', 'left')}_"), 
+                key=f"merge_left_prefix_{index}"
+            )
         with col2:
             saved_in2 = step.get('input_step_2')
             step['input_step_2'] = st.selectbox("Right Input Step", input_ids, index=get_safe_index(input_ids, saved_in2), key=f"merge_in2_{index}")
             right_cols = get_cols('input_step_2')
             saved_right_on = step.get('right_on')
             step['right_on'] = st.selectbox("Right Join Key", right_cols, index=get_safe_index(right_cols, saved_right_on), key=f"merge_right_on_{index}")
+            step['right_prefix'] = st.text_input(
+                "Right Table Prefix", 
+                value=step.get('right_prefix', f"{step.get('input_step_2', 'right')}_"), 
+                key=f"merge_right_prefix_{index}"
+            )
 
         how_options = ['inner', 'left', 'right', 'outer']
         saved_how = step.get('how', 'inner')
