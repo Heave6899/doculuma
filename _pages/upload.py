@@ -14,6 +14,41 @@ import io
 
 chroma_client = db_utils.get_chroma_client()
 embedding_fn = db_utils.get_embedding_function()
+
+def handle_postman_upload(conn, file, data):
+    """UI handler for processing a Postman Collection."""
+    st.info("✅ Postman Collection detected. Processing API endpoints.")
+    
+    df_apis = file_processors.process_postman_collection(data)
+    
+    st.markdown("#### API Endpoints Preview")
+    st.dataframe(df_apis.head(10), use_container_width=True)
+    
+    default_tbl = f"{Path(file.name).stem}_apis".replace(" ", "_").replace("-", "_")
+    tbl_name = st.text_input(
+        "Table name for Postman API data",
+        value=default_tbl,
+        key=f"tbl_postman_{file.name}"
+    ).strip()
+
+    if st.button("Save Postman API Data", key=f"save_postman_{file.name}"):
+        if not re.match(config.TABLE_NAME_REGEX, tbl_name):
+            st.error("Invalid table name. Use letters, numbers, and underscores.")
+            return
+
+        all_tables = db_utils.list_tables(conn, 0)
+        if tbl_name in all_tables:
+            st.warning(f"Table '{tbl_name}' already exists. Overwriting.")
+        
+        snap = db_utils.persist_version(
+            conn, df_apis, tbl_name, 0,
+            df_apis.columns.tolist(),
+            {c: c for c in df_apis.columns}
+        )
+        st.session_state.toast_message = f"Saved Postman API data to version `{snap}`"
+        db_utils.list_tables.clear()
+        st.rerun()
+        
 def handle_json_upload(_conn, file):
     """UI handler for processing a single JSON file upload."""
     st.subheader(f"Processing: `{file.name}`")
@@ -24,15 +59,50 @@ def handle_json_upload(_conn, file):
         st.error(f"Invalid JSON in {file.name}: {e}")
         return
 
+    
+
+    # --- Detect + persist JSON Schema structure ---
+    info = data.get('info', {})
+    is_postman = 'item' in data and 'schema' in info and 'postman.com' in info.get('schema', '')
+    is_schema = isinstance(data, dict) and any(k in data for k in ["properties", "definitions", "components"])
+    if is_postman:
+        handle_postman_upload(_conn, file, data)
+        return # Stop further processing for this file
+    if is_schema:
+        st.markdown("---")
+        st.markdown("#### Schema Preview")
+        df_schema = json_utils.flatten_json_schema(data)
+        st.dataframe(df_schema, use_container_width=True)
+        all_tables = db_utils.list_tables(_conn, 0)
+        default_schema_tbl = f"{Path(file.name).stem}_schema".replace(" ", "_").replace("-", "_")
+        schema_tbl_name = st.text_input("Table name for schema", default_schema_tbl, key=f"tbl_schema_{file.name}").strip()
+        overwrite_schema = schema_tbl_name in all_tables and st.checkbox(
+            f"Overwrite existing `{schema_tbl_name}`?", key=f"ovw_schema_{file.name}"
+        )
+
+        if st.button("Save JSON Schema as Versioned Table", key=f"save_json_schema_{file.name}"):
+            if schema_tbl_name in all_tables and not overwrite_schema:
+                st.error(f"Schema table '{schema_tbl_name}' exists. Enable overwrite to proceed.")
+            else:
+                snap2 = db_utils.persist_version(
+                    _conn, df_schema, schema_tbl_name, 0,
+                    df_schema.columns.tolist(),
+                    {c: c for c in df_schema.columns}
+                )
+                st.session_state.toast_message = f"Saved schema to version `{snap2}`"
+                db_utils.list_tables.clear()
+                st.rerun()
+        return
     # --- Flatten data for storage/querying ---
+    
+    st.markdown("---")
+    st.markdown("#### JSON Data Preview")
     records = data if isinstance(data, list) else [data]
     flat_records = [json_utils.deep_flatten_json(rec) for rec in records]
     df_data = pd.DataFrame(flat_records)
     df_data = json_utils.prepare_json_df_for_sql(df_data)
 
-    st.markdown("**Data Preview (first 5 rows)**")
     st.dataframe(df_data.head(5), use_container_width=True)
-
     default_tbl = Path(file.name).stem.replace(" ", "_").replace("-", "_")
     tbl_name = st.text_input(
         "Table name for JSON data",
@@ -62,36 +132,7 @@ def handle_json_upload(_conn, file):
             st.write("DEBUG: Save action is running...") 
             st.session_state.toast_message = f"Saved data to version `{snap}`"
             db_utils.list_tables.clear()
-
-
-
             st.rerun()
-
-    # --- Detect + persist JSON Schema structure ---
-    if isinstance(data, dict) and any(k in data for k in ["properties", "definitions", "components"]):
-        st.markdown("---")
-        st.markdown("#### Schema Preview")
-        df_schema = json_utils.flatten_json_schema(data)
-        st.dataframe(df_schema, use_container_width=True)
-
-        schema_tbl_name = st.text_input("Table name for schema", f"{tbl_name}_schema", key=f"tbl_schema_{file.name}").strip()
-        overwrite_schema = schema_tbl_name in all_tables and st.checkbox(
-            f"Overwrite existing `{schema_tbl_name}`?", key=f"ovw_schema_{file.name}"
-        )
-
-        if st.button("Save JSON Schema as Versioned Table", key=f"save_json_schema_{file.name}"):
-            if schema_tbl_name in all_tables and not overwrite_schema:
-                st.error(f"Schema table '{schema_tbl_name}' exists. Enable overwrite to proceed.")
-            else:
-                snap2 = db_utils.persist_version(
-                    _conn, df_schema, schema_tbl_name, 0,
-                    df_schema.columns.tolist(),
-                    {c: c for c in df_schema.columns}
-                )
-                st.session_state.toast_message = f"Saved schema to version `{snap2}`"
-                db_utils.list_tables.clear()
-                st.rerun()
-
 
 def render(conn):
     """Renders the main file upload and versioning page."""

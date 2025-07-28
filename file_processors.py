@@ -119,3 +119,77 @@ def embed_and_save_to_chroma(chroma_client, df, table_name, embed_cols, embeddin
             metadatas=metadatas[i:batch_end],
             ids=ids[i:batch_end]
         )
+        
+        
+# In file_processors.py, add these two new functions:
+
+def _parse_postman_item(item, path_parts=[]):
+    """
+    A recursive helper function to parse items/folders in a Postman collection.
+    """
+    records = []
+    is_folder = 'item' in item and isinstance(item.get('item'), list)
+    current_path = path_parts + [item.get('name', '')]
+
+    if is_folder:
+        for sub_item in item['item']:
+            records.extend(_parse_postman_item(sub_item, current_path))
+    else:
+        # It's a request; extract its details
+        request_data = item.get('request', {})
+        api_name = item.get('name', 'N/A')
+        method = request_data.get('method', 'N/A')
+        url_details = request_data.get('url', {})
+        url = url_details.get('raw', '') if isinstance(url_details, dict) else str(url_details)
+
+        # Extract Request Body Fields
+        body = request_data.get('body', {}).get('raw')
+        if body:
+            try:
+                body_json = json.loads(body)
+                if isinstance(body_json, dict):
+                    for field in body_json.keys():
+                        records.append({
+                            'folder_path': ' > '.join(path_parts), 'api_name': api_name,
+                            'method': method, 'url': url, 'source': 'Request Body',
+                            'response_name': '', 'response_code': '', 'field_name': field
+                        })
+            except (json.JSONDecodeError, AttributeError): pass
+
+        # Extract Example Response Body Fields
+        for response in item.get('response', []):
+            response_body = response.get('body')
+            if response_body:
+                try:
+                    response_json = json.loads(response_body)
+                    if isinstance(response_json, dict):
+                        for field in response_json.keys():
+                            records.append({
+                                'folder_path': ' > '.join(path_parts), 'api_name': api_name,
+                                'method': method, 'url': url, 'source': 'Example Response',
+                                'response_name': response.get('name', ''),
+                                'response_code': response.get('code', ''), 'field_name': field
+                            })
+                except (json.JSONDecodeError, AttributeError): pass
+    return records
+
+
+def process_postman_collection(data: dict) -> pd.DataFrame:
+    """
+    Takes loaded Postman JSON data and flattens it into a DataFrame.
+    """
+    collection_name = data.get('info', {}).get('name', 'Untitled Collection')
+    all_records = []
+    for item in data.get('item', []):
+        all_records.extend(_parse_postman_item(item))
+
+    if not all_records:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_records)
+    df['collection_name'] = collection_name
+    
+    # Reorder columns for clarity
+    cols_order = ['collection_name', 'folder_path', 'api_name', 'method', 'url', 'source', 'response_name', 'response_code', 'field_name']
+    df = df[cols_order]
+    return df
