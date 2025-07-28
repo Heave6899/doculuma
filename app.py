@@ -7,7 +7,7 @@ from streamlit_option_menu import option_menu
 import config
 import db_utils
 import dialogs
-from _pages import dynamic_pipeline, homepage, pipeline_steps, settings, uni_query, upload, sql_console, version_history, json_explorer, table_editor, visualization
+from _pages import chat_with_data, dynamic_pipeline, homepage, pipeline_steps, settings, uni_query, upload, sql_console, version_history, json_explorer, table_editor, visualization
 from integrations import unqork_integration
 
 def render_sidebar(conn):
@@ -54,7 +54,7 @@ def render_sidebar(conn):
 def main():
     """Main function to run the Streamlit application."""
     st.set_page_config(layout="wide", page_title="DocuLuma")
-    pages = ["Homepage", "Upload & Version", "SQL Console","Uni-Query","Dynamic Pipeline", "Version History", "JSON Explorer", "Table Editor", "Data Visualization","Settings"]
+    pages = ["Homepage", "Upload & Version", "SQL Console","Uni-Query","Dynamic Pipeline", "Chat with Data","Version History", "JSON Explorer", "Table Editor", "Data Visualization","Settings"]
     if st.session_state.get("integrations", {}).get("unqork", False):
         pages.append("Integrations > Unqork")
     if "navigate_to" in st.session_state:
@@ -73,7 +73,7 @@ def main():
     selected_page = option_menu(
         menu_title=None,
         options=pages,
-        icons=["house-door-fill","1-circle-fill", "terminal-fill","bi-terminal-split", "diagram-3-fill", "clock-history", "braces", "pencil-square","bar-chart-line-fill","gear-fill"],
+        icons=["house-door-fill","1-circle-fill", "terminal-fill","bi-terminal-split", "diagram-3-fill", "chat-dots-fill", "clock-history", "braces", "pencil-square","bar-chart-line-fill","gear-fill"],
         orientation="horizontal",
         key="main_nav",
         styles={
@@ -120,6 +120,8 @@ def main():
         unqork_integration.render(conn)
     elif selected_page == "Uni-Query":
         uni_query.render(conn)
+    elif selected_page == "Chat with Data":
+        chat_with_data.render(conn)
 
 if __name__ == "__main__":
     main()
